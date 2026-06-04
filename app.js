@@ -252,55 +252,113 @@ function renderChapter() {
 // ─────────────────────────────────────────
 // TEXT SELECTION + TRANSLATION
 // ─────────────────────────────────────────
-function setupSelection() {
-  const btn = document.getElementById('translate-btn');
+function getWordAtPoint(x, y) {
+  let range = null;
+  if (document.caretRangeFromPoint) {
+    range = document.caretRangeFromPoint(x, y);
+  } else if (document.caretPositionFromPoint) {
+    const pos = document.caretPositionFromPoint(x, y);
+    if (pos) {
+      range = document.createRange();
+      range.setStart(pos.offsetNode, pos.offset);
+      range.collapse(true);
+    }
+  }
+  if (!range) return null;
 
+  const sel = window.getSelection();
+  sel.removeAllRanges();
+  sel.addRange(range);
+
+  if (sel.modify) {
+    sel.modify('move', 'backward', 'word');
+    sel.modify('extend', 'forward', 'word');
+  }
+
+  const word = sel.toString().trim().replace(/^[^a-zA-Z']+|[^a-zA-Z']+$/g, '');
+  return word.length > 0 ? word : null;
+}
+
+function setupSelection() {
+  const rc = document.getElementById('reader-content');
+  const btn = document.getElementById('translate-btn');
+  let tapStart = { time: 0, x: 0, y: 0 };
+
+  // 单击单词直接翻译
+  rc.addEventListener('touchstart', (e) => {
+    tapStart = { time: Date.now(), x: e.touches[0].clientX, y: e.touches[0].clientY };
+  }, { passive: true });
+
+  rc.addEventListener('touchend', (e) => {
+    const dt = Date.now() - tapStart.time;
+    const touch = e.changedTouches[0];
+    const dx = Math.abs(touch.clientX - tapStart.x);
+    const dy = Math.abs(touch.clientY - tapStart.y);
+
+    if (dt > 320 || dx > 10 || dy > 10) return;
+
+    // 已有多词选中时不处理（交给翻译按钮）
+    if ((window.getSelection().toString().trim().length > 3)) return;
+
+    const word = getWordAtPoint(touch.clientX, touch.clientY);
+    if (!word) return;
+
+    e.preventDefault();
+
+    const sel = window.getSelection();
+    let context = word, sentence = word;
+    if (sel && sel.rangeCount > 0) {
+      const range = sel.getRangeAt(0);
+      let para = range.commonAncestorContainer;
+      if (para.nodeType === Node.TEXT_NODE) para = para.parentElement;
+      while (para && para !== rc && !['P','DIV','SECTION','BLOCKQUOTE','LI'].includes(para.tagName)) {
+        para = para.parentElement;
+      }
+      context = para ? para.textContent.trim() : word;
+      sentence = extractSentence(context, word);
+    }
+    window.getSelection().removeAllRanges();
+
+    S.savedSelText = { text: word, context, sentence };
+    openPopup(S.savedSelText);
+  }, { passive: false });
+
+  // 长按框选短语：选中超过3个字符时显示翻译按钮
   document.addEventListener('selectionchange', () => {
     if (S.view !== 'reader') return;
     const sel = window.getSelection();
     const text = sel ? sel.toString().trim() : '';
-    if (text.length < 1 || text.length > 600) {
-      // wait briefly before hiding (user might be tapping our button)
+
+    if (text.length > 3) {
+      try {
+        const range = sel.getRangeAt(0);
+        const rect = range.getBoundingClientRect();
+        let para = range.commonAncestorContainer;
+        if (para.nodeType === Node.TEXT_NODE) para = para.parentElement;
+        while (para && para !== rc && !['P','DIV','SECTION','BLOCKQUOTE','LI'].includes(para.tagName)) {
+          para = para.parentElement;
+        }
+        const context = para ? para.textContent.trim() : text;
+        S.savedSelText = { text, context, sentence: extractSentence(context, text) };
+
+        const top = Math.max(rect.top - 48, 60);
+        const left = Math.min(Math.max(rect.left + rect.width / 2 - 36, 8), window.innerWidth - 90);
+        btn.style.top = top + 'px';
+        btn.style.left = left + 'px';
+        btn.classList.remove('hidden');
+      } catch (_) {}
+    } else {
       setTimeout(() => {
         if (!window.getSelection().toString().trim()) hideTranslateBtn();
-      }, 180);
-      return;
+      }, 200);
     }
-    try {
-      const range = sel.getRangeAt(0);
-      const rect = range.getBoundingClientRect();
-
-      // walk up to paragraph-level container
-      let node = range.commonAncestorContainer;
-      let para = node.nodeType === Node.TEXT_NODE ? node.parentElement : node;
-      const rc = document.getElementById('reader-content');
-      while (para && para !== rc && !['P','DIV','SECTION','BLOCKQUOTE','LI'].includes(para.tagName)) {
-        para = para.parentElement;
-      }
-      const context = para ? para.textContent.trim() : text;
-      const sentence = extractSentence(context, text);
-
-      S.savedSelText = { text, context, sentence };
-
-      // position button above selection
-      const top = Math.max(rect.top - 48, 60);
-      const left = Math.min(Math.max(rect.left + rect.width / 2 - 36, 8), window.innerWidth - 90);
-      btn.style.top = top + 'px';
-      btn.style.left = left + 'px';
-      btn.classList.remove('hidden');
-    } catch (_) { /* ignore */ }
   });
 
-  // prevent touchstart from clearing iOS selection
   btn.addEventListener('touchstart', (e) => e.preventDefault(), { passive: false });
-  btn.addEventListener('touchend', (e) => {
-    e.preventDefault();
-    triggerTranslation();
-  });
-  btn.addEventListener('click', triggerTranslation); // desktop fallback
+  btn.addEventListener('touchend', (e) => { e.preventDefault(); triggerTranslation(); });
+  btn.addEventListener('click', triggerTranslation);
 
-  // hide button on reader scroll
-  document.getElementById('reader-content').addEventListener('scroll', hideTranslateBtn);
+  rc.addEventListener('scroll', hideTranslateBtn);
 }
 
 function hideTranslateBtn() {
@@ -347,12 +405,17 @@ async function openPopup(sel) {
 
   try {
     const raw = await callDeepSeek(sel.text, sel.context, apiKey);
-    const { translation, meaning } = parseResponse(raw);
-    S.pendingTranslation = { word: sel.text, translation, meaning, sentence: sel.sentence };
-    bodyEl.innerHTML = `
-      <div class="translation-line">${esc(translation)}</div>
-      ${meaning ? `<div class="meaning-line">${esc(meaning)}</div>` : ''}
-    `;
+    const parsed = parseTranslation(raw);
+    S.pendingTranslation = {
+      word: sel.text,
+      baseForm: parsed.baseForm,
+      phonetic: parsed.phonetic,
+      translation: parsed.quizTranslation,
+      defs: parsed.defs,
+      meaning: parsed.contextExpl,
+      sentence: sel.sentence,
+    };
+    bodyEl.innerHTML = renderTranslationHtml(parsed);
     saveBtn.style.display = 'block';
   } catch (err) {
     bodyEl.textContent = '翻译失败：' + err.message;
@@ -360,19 +423,34 @@ async function openPopup(sel) {
 }
 
 async function callDeepSeek(word, context, apiKey) {
+  const isPhrase = word.includes(' ') || word.length > 20;
+
+  const singleWordFmt =
+`原型：[动词原形/名词单数等基本形式]
+音标：/[IPA国际音标]/
+[词性]. [中文含义]
+[词性]. [中文含义]
+（列出2-5个主要词义，每行一个，词性用vi/vt/n/adj/adv等缩写）
+
+结合上下文
+[一段话，说明该词在此处的具体用法、含义，以及与上下文的关系]`;
+
+  const phraseFmt =
+`翻译：[流畅的中文翻译]
+
+结合上下文
+[一段话，说明该短语/句子在此处的含义和语境]`;
+
   const prompt =
-`你是英文阅读助手。用户在阅读英文小说时选中了一段文字，请结合上下文翻译，给出准确的中文含义。
+`你是英文阅读助手。用户在阅读英文小说时选中了一段文字，请分析并翻译。
 
 书中原文（上下文）：
 "${context.slice(0, 500)}"
 
-用户选中的内容：「${word}」
+选中内容：「${word}」
 
-要求：结合上下文理解词义，而非孤立翻译。单词给出此语境下的具体含义；短语或句子给出流畅中文翻译。
-
-严格按以下格式回复，不要加任何额外内容：
-翻译：[中文翻译]
-释义：[在此处的含义，一句话以内]`;
+请严格按以下格式回复，不添加任何其他内容：
+${isPhrase ? phraseFmt : singleWordFmt}`;
 
   const resp = await fetch('https://api.deepseek.com/chat/completions', {
     method: 'POST',
@@ -380,7 +458,7 @@ async function callDeepSeek(word, context, apiKey) {
     body: JSON.stringify({
       model: 'deepseek-chat',
       messages: [{ role: 'user', content: prompt }],
-      max_tokens: 160,
+      max_tokens: 280,
       temperature: 0.2,
     }),
   });
@@ -393,14 +471,50 @@ async function callDeepSeek(word, context, apiKey) {
   return data.choices[0].message.content.trim();
 }
 
-function parseResponse(text) {
-  let translation = '', meaning = '';
-  for (const line of text.split('\n')) {
-    if (line.startsWith('翻译：')) translation = line.slice(3).trim();
-    else if (line.startsWith('释义：')) meaning = line.slice(3).trim();
+function parseTranslation(text) {
+  const lines = text.split('\n');
+  let baseForm = '', phonetic = '', translation = '', contextExpl = '';
+  const defs = [];
+  let inContext = false;
+  const ctxLines = [];
+
+  for (const raw of lines) {
+    const line = raw.trim();
+    if (!line) continue;
+    if (line.startsWith('原型：')) { baseForm = line.slice(3).trim(); continue; }
+    if (line.startsWith('音标：')) { phonetic = line.slice(3).trim(); continue; }
+    if (line.startsWith('翻译：')) { translation = line.slice(3).trim(); continue; }
+    if (line === '结合上下文') { inContext = true; continue; }
+    if (inContext) { ctxLines.push(line); continue; }
+    if (baseForm && /^[a-z]+[./]/.test(line)) defs.push(line);
   }
-  if (!translation) translation = text.split('\n')[0].replace(/^翻译[：:]\s*/, '').trim() || text;
-  return { translation, meaning };
+
+  contextExpl = ctxLines.join(' ');
+
+  // 提取简短中文用于背单词选项
+  let quizTranslation = translation;
+  if (!quizTranslation && defs.length > 0) {
+    quizTranslation = defs[0].replace(/^[a-z]+[./]\s*/i, '').split(/[,，]/)[0].trim();
+  }
+
+  return { baseForm, phonetic, defs, translation, contextExpl, quizTranslation, raw: text };
+}
+
+function renderTranslationHtml(p) {
+  if (p.baseForm || p.defs.length > 0) {
+    return `
+      <div class="t-head-row">
+        ${p.baseForm ? `<span class="t-base-word">${esc(p.baseForm)}</span>` : ''}
+        ${p.phonetic ? `<span class="t-phonetic">${esc(p.phonetic)}</span>` : ''}
+      </div>
+      <div class="t-defs">${p.defs.map(d => `<div class="t-def">${esc(d)}</div>`).join('')}</div>
+      ${p.contextExpl ? `<div class="t-label">结合上下文</div><div class="t-context">${esc(p.contextExpl)}</div>` : ''}
+    `.trim();
+  }
+  return `
+    <div class="t-translation">${esc(p.translation || p.raw)}</div>
+    ${p.contextExpl ? `<div class="t-label">结合上下文</div><div class="t-context">${esc(p.contextExpl)}</div>` : ''}
+  `.trim();
 }
 
 async function saveWord() {
@@ -411,9 +525,12 @@ async function saveWord() {
 
   const entry = {
     word: pt.word,
-    translation: pt.translation,
-    meaning: pt.meaning,
-    sentence: pt.sentence,
+    baseForm: pt.baseForm || '',
+    phonetic: pt.phonetic || '',
+    defs: pt.defs || [],
+    translation: pt.translation || '',
+    meaning: pt.meaning || '',
+    sentence: pt.sentence || '',
     bookTitle: S.currentBook ? S.currentBook.title : '',
     dateAdded: Date.now(),
   };
@@ -422,6 +539,16 @@ async function saveWord() {
   S.vocabulary.push(entry);
   document.getElementById('translation-popup').classList.add('hidden');
   toast('已保存到单词库');
+}
+
+// 从词条提取简短的背单词显示标签（15字以内）
+function quizLabel(v) {
+  if (v.defs && v.defs.length > 0) {
+    const chinese = v.defs[0].replace(/^[a-z]+[./]\s*/i, '').split(/[,，]/)[0].trim();
+    return chinese.slice(0, 15);
+  }
+  const t = v.translation || '';
+  return t.length > 18 ? t.slice(0, 16) + '…' : t;
 }
 
 // ─────────────────────────────────────────
@@ -452,10 +579,16 @@ function renderVocab() {
   list.innerHTML = sorted.map(v => `
     <div class="vocab-item">
       <div class="vocab-item-header">
-        <span class="vocab-word">${esc(v.word)}</span>
+        <div>
+          <span class="vocab-word">${esc(v.word)}</span>
+          ${v.baseForm && v.baseForm !== v.word ? `<span class="vocab-base">（${esc(v.baseForm)}）</span>` : ''}
+          ${v.phonetic ? `<span class="vocab-phonetic">${esc(v.phonetic)}</span>` : ''}
+        </div>
         <button class="vocab-delete" data-id="${v.id}">✕</button>
       </div>
-      <div class="vocab-translation">${esc(v.translation)}</div>
+      ${v.defs && v.defs.length > 0
+        ? `<div class="vocab-defs">${v.defs.map(d => `<div class="vocab-def">${esc(d)}</div>`).join('')}</div>`
+        : v.translation ? `<div class="vocab-translation">${esc(v.translation)}</div>` : ''}
       ${v.meaning ? `<div class="vocab-meaning">${esc(v.meaning)}</div>` : ''}
       ${v.sentence ? `<div class="vocab-sentence">"${esc(v.sentence)}"</div>` : ''}
     </div>
@@ -490,14 +623,16 @@ function renderQuestion() {
   document.getElementById('quiz-progress').textContent =
     `${S.quizIndex + 1} / ${S.quizQuestions.length}`;
   document.getElementById('quiz-word').textContent = q.word;
+  const phoneticEl = document.getElementById('quiz-phonetic');
+  if (phoneticEl) phoneticEl.textContent = q.phonetic || '';
   document.getElementById('quiz-result').classList.add('hidden');
   S.quizAnswered = false;
 
-  // 1 correct + 3 wrong
+  // 1 correct + 3 wrong，选项只显示简短中文含义
   const others = shuffle(S.vocabulary.filter(v => v.id !== q.id)).slice(0, 3);
   const choices = shuffle([
-    { label: q.translation, correct: true },
-    ...others.map(w => ({ label: w.translation, correct: false })),
+    { label: quizLabel(q), correct: true },
+    ...others.map(w => ({ label: quizLabel(w), correct: false })),
   ]);
 
   const box = document.getElementById('quiz-choices');
