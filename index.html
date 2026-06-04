@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="读书助手">
+  <link rel="manifest" href="manifest.json">
+  <title>读书助手</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="app">
+
+  <!-- 书架 -->
+  <div id="view-shelf" class="view active">
+    <header class="header">
+      <h1>书架</h1>
+      <button class="icon-btn" id="settings-btn">⚙</button>
+    </header>
+    <div class="content">
+      <div id="book-list" class="book-list"></div>
+      <label class="import-btn" for="file-input">
+        + 导入 EPUB 书籍
+        <input type="file" id="file-input" accept=".epub" style="display:none">
+      </label>
+    </div>
+  </div>
+
+  <!-- 阅读器 -->
+  <div id="view-reader" class="view">
+    <header class="header reader-header">
+      <button class="icon-btn" id="back-btn">←</button>
+      <div class="header-center">
+        <div id="book-title-display" class="header-title"></div>
+        <div id="chapter-info" class="header-subtitle"></div>
+      </div>
+      <button class="icon-btn" id="theme-btn">☀</button>
+    </header>
+    <div id="reader-content" class="reader-content"></div>
+    <div class="chapter-nav">
+      <button id="prev-chapter" class="nav-btn">上一章</button>
+      <span id="chapter-counter" class="chapter-counter"></span>
+      <button id="next-chapter" class="nav-btn">下一章</button>
+    </div>
+  </div>
+
+  <!-- 单词库 -->
+  <div id="view-vocab" class="view">
+    <header class="header">
+      <h1>单词库</h1>
+      <span id="word-count" class="count-badge">0</span>
+    </header>
+    <div class="content">
+      <button id="start-quiz-btn" class="primary-btn" disabled>开始练习</button>
+      <div id="vocab-list" class="vocab-list"></div>
+    </div>
+  </div>
+
+  <!-- 练习 -->
+  <div id="view-quiz" class="view">
+    <header class="header">
+      <button class="icon-btn" id="quit-quiz-btn">←</button>
+      <h1>练习</h1>
+      <span id="quiz-progress" class="count-badge"></span>
+    </header>
+    <div class="content quiz-content">
+      <div class="quiz-card">
+        <div id="quiz-question-label" class="quiz-question-label">这个词是什么意思？</div>
+        <div id="quiz-word" class="quiz-word"></div>
+      </div>
+      <div id="quiz-choices" class="quiz-choices"></div>
+      <div id="quiz-result" class="quiz-result hidden">
+        <div id="result-icon" class="result-icon"></div>
+        <div id="result-message" class="result-message"></div>
+        <div id="correct-answer" class="correct-answer hidden"></div>
+        <div id="original-sentence" class="original-sentence"></div>
+        <button id="next-question-btn" class="primary-btn">下一题</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 设置 -->
+  <div id="view-settings" class="view">
+    <header class="header">
+      <button class="icon-btn" id="settings-back-btn">←</button>
+      <h1>设置</h1>
+    </header>
+    <div class="content">
+      <div class="settings-group">
+        <label class="settings-label">DeepSeek API Key</label>
+        <input type="password" id="api-key-input" class="settings-input" placeholder="sk-...">
+        <p class="settings-hint">在 platform.deepseek.com 获取，只存在本机，不会上传</p>
+        <button id="save-api-key-btn" class="primary-btn">保存</button>
+      </div>
+      <div class="settings-group">
+        <label class="settings-label">阅读字号</label>
+        <div class="font-size-control">
+          <button id="font-decrease" class="size-btn">A-</button>
+          <span id="font-size-display">18px</span>
+          <button id="font-increase" class="size-btn">A+</button>
+        </div>
+      </div>
+      <div class="settings-group">
+        <label class="settings-label" style="color:#dc2626">清空数据</label>
+        <button id="clear-vocab-btn" class="danger-btn">清空所有单词</button>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- 底部导航 -->
+<nav id="bottom-nav" class="bottom-nav">
+  <button class="nav-item active" data-view="shelf">
+    <span class="nav-icon">📚</span>
+    <span class="nav-label">书架</span>
+  </button>
+  <button class="nav-item" data-view="vocab">
+    <span class="nav-icon">📝</span>
+    <span class="nav-label">单词库</span>
+  </button>
+</nav>
+
+<!-- 悬浮翻译按钮 -->
+<button id="translate-btn" class="translate-btn hidden">翻 译</button>
+
+<!-- 翻译弹窗 -->
+<div id="translation-popup" class="popup hidden">
+  <div class="popup-overlay" id="popup-overlay"></div>
+  <div class="popup-content">
+    <div id="popup-word" class="popup-word"></div>
+    <div id="popup-body" class="popup-body">
+      <div class="loading-spinner"></div>
+    </div>
+    <div class="popup-actions">
+      <button id="save-word-btn" class="primary-btn" style="display:none">保存到单词库</button>
+      <button id="close-popup-btn" class="secondary-btn">关闭</button>
+    </div>
+  </div>
+</div>
+
+<!-- 提示条 -->
+<div id="toast" class="toast hidden"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
