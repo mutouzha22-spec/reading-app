@@ -324,47 +324,30 @@ function getWordAtPoint(x, y) {
 function setupSelection() {
   const rc = document.getElementById('reader-content');
   const btn = document.getElementById('translate-btn');
-  // 按住 200ms 触发翻译，手指移动则取消（不影响滚动）
-  let pressTimer = null;
-  let pressData = null;
-  let touchOrigin = { x: 0, y: 0 };
+  let tapStart = { time: 0, x: 0, y: 0 };
 
   rc.addEventListener('touchstart', (e) => {
-    const touch = e.touches[0];
-    touchOrigin = { x: touch.clientX, y: touch.clientY };
-    pressData = null;
-    clearTimeout(pressTimer);
-
-    pressTimer = setTimeout(() => {
-      const result = getWordAtPoint(touchOrigin.x, touchOrigin.y);
-      if (!result) return;
-      const { word, node } = result;
-
-      let para = node.parentElement;
-      while (para && para !== rc && !['P','DIV','SECTION','BLOCKQUOTE','LI'].includes(para.tagName)) {
-        para = para.parentElement;
-      }
-      const context = para ? para.textContent.trim() : word;
-      pressData = { text: word, context, sentence: extractSentence(context, word) };
-    }, 200);
-  }, { passive: true });
-
-  rc.addEventListener('touchmove', (e) => {
-    const touch = e.touches[0];
-    const dx = Math.abs(touch.clientX - touchOrigin.x);
-    const dy = Math.abs(touch.clientY - touchOrigin.y);
-    if (dx > 8 || dy > 8) {
-      clearTimeout(pressTimer);
-      pressData = null;
-    }
+    tapStart = { time: Date.now(), x: e.touches[0].clientX, y: e.touches[0].clientY };
   }, { passive: true });
 
   rc.addEventListener('touchend', (e) => {
-    clearTimeout(pressTimer);
-    if (!pressData) return;
+    const dt = Date.now() - tapStart.time;
+    const touch = e.changedTouches[0];
+    const dx = Math.abs(touch.clientX - tapStart.x);
+    const dy = Math.abs(touch.clientY - tapStart.y);
+    if (dt > 320 || dx > 10 || dy > 10) return;
+
+    const result = getWordAtPoint(touch.clientX, touch.clientY);
+    if (!result) return;
     e.preventDefault();
-    S.savedSelText = pressData;
-    pressData = null;
+
+    const { word, node } = result;
+    let para = node.parentElement;
+    while (para && para !== rc && !['P','DIV','SECTION','BLOCKQUOTE','LI'].includes(para.tagName)) {
+      para = para.parentElement;
+    }
+    const context = para ? para.textContent.trim() : word;
+    S.savedSelText = { text: word, context, sentence: extractSentence(context, word) };
     openPopup(S.savedSelText);
   }, { passive: false });
 

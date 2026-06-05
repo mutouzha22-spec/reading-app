@@ -167,8 +167,8 @@ html, body {
   line-height: 1.9;
   color: var(--text);
   background: var(--bg);
-  -webkit-user-select: none;
-  user-select: none;
+  -webkit-user-select: text;
+  user-select: text;
   transform: translateZ(0);
 }
 .reader-content p { margin-bottom: 1.1em; }
