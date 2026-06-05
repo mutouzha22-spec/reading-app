@@ -294,30 +294,31 @@ function highlightVocabWords(container) {
 // TEXT SELECTION + TRANSLATION
 // ─────────────────────────────────────────
 function getWordAtPoint(x, y) {
-  let range = null;
-  if (document.caretRangeFromPoint) {
-    range = document.caretRangeFromPoint(x, y);
-  } else if (document.caretPositionFromPoint) {
-    const pos = document.caretPositionFromPoint(x, y);
-    if (pos) {
-      range = document.createRange();
-      range.setStart(pos.offsetNode, pos.offset);
-      range.collapse(true);
-    }
-  }
+  const range = document.caretRangeFromPoint
+    ? document.caretRangeFromPoint(x, y)
+    : (() => {
+        const pos = document.caretPositionFromPoint && document.caretPositionFromPoint(x, y);
+        if (!pos) return null;
+        const r = document.createRange();
+        r.setStart(pos.offsetNode, pos.offset);
+        r.collapse(true);
+        return r;
+      })();
   if (!range) return null;
 
-  const sel = window.getSelection();
-  sel.removeAllRanges();
-  sel.addRange(range);
+  const node = range.startContainer;
+  if (node.nodeType !== Node.TEXT_NODE) return null;
 
-  if (sel.modify) {
-    sel.modify('move', 'backward', 'word');
-    sel.modify('extend', 'forward', 'word');
-  }
+  const text = node.textContent;
+  let s = range.startOffset;
+  let e = s;
+  if (s === text.length && s > 0) s--;
 
-  const word = sel.toString().trim().replace(/^[^a-zA-Z']+|[^a-zA-Z']+$/g, '');
-  return word.length > 0 ? word : null;
+  while (s > 0 && /[a-zA-Z'']/.test(text[s - 1])) s--;
+  while (e < text.length && /[a-zA-Z'']/.test(text[e])) e++;
+
+  const word = text.slice(s, e).replace(/^[^a-zA-Z]+|[^a-zA-Z]+$/g, '');
+  return word.length > 0 ? { word, node } : null;
 }
 
 function setupSelection() {
@@ -335,24 +336,16 @@ function setupSelection() {
     clearTimeout(pressTimer);
 
     pressTimer = setTimeout(() => {
-      const word = getWordAtPoint(touchOrigin.x, touchOrigin.y);
-      if (!word) return;
+      const result = getWordAtPoint(touchOrigin.x, touchOrigin.y);
+      if (!result) return;
+      const { word, node } = result;
 
-      const sel = window.getSelection();
-      let context = word, sentence = word;
-      if (sel && sel.rangeCount > 0) {
-        const range = sel.getRangeAt(0);
-        let para = range.commonAncestorContainer;
-        if (para.nodeType === Node.TEXT_NODE) para = para.parentElement;
-        while (para && para !== rc && !['P','DIV','SECTION','BLOCKQUOTE','LI'].includes(para.tagName)) {
-          para = para.parentElement;
-        }
-        context = para ? para.textContent.trim() : word;
-        sentence = extractSentence(context, word);
+      let para = node.parentElement;
+      while (para && para !== rc && !['P','DIV','SECTION','BLOCKQUOTE','LI'].includes(para.tagName)) {
+        para = para.parentElement;
       }
-      // 清除可见选中，避免触发 iOS 系统菜单
-      window.getSelection().removeAllRanges();
-      pressData = { text: word, context, sentence };
+      const context = para ? para.textContent.trim() : word;
+      pressData = { text: word, context, sentence: extractSentence(context, word) };
     }, 200);
   }, { passive: true });
 
