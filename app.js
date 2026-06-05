@@ -247,6 +247,47 @@ function renderChapter() {
 
   localStorage.setItem(`pos_${book.id}`, S.currentChapter);
   hideTranslateBtn();
+  highlightVocabWords(rc);
+}
+
+function highlightVocabWords(container) {
+  if (!S.vocabulary.length) return;
+
+  const words = new Set();
+  S.vocabulary.forEach(v => {
+    if (v.word && v.word.length > 1) words.add(v.word.trim());
+    if (v.baseForm && v.baseForm.length > 1) words.add(v.baseForm.trim());
+  });
+  if (!words.size) return;
+
+  const pattern = [...words]
+    .map(w => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+    .join('|');
+  const regex = new RegExp(`\\b(${pattern})\\b`, 'gi');
+
+  const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT, null);
+  const nodes = [];
+  let n;
+  while ((n = walker.nextNode())) nodes.push(n);
+
+  for (const node of nodes) {
+    const txt = node.textContent;
+    if (!regex.test(txt)) { regex.lastIndex = 0; continue; }
+    regex.lastIndex = 0;
+
+    const frag = document.createDocumentFragment();
+    let last = 0, m;
+    while ((m = regex.exec(txt)) !== null) {
+      if (m.index > last) frag.appendChild(document.createTextNode(txt.slice(last, m.index)));
+      const span = document.createElement('span');
+      span.className = 'vocab-hl';
+      span.textContent = m[0];
+      frag.appendChild(span);
+      last = m.index + m[0].length;
+    }
+    if (last < txt.length) frag.appendChild(document.createTextNode(txt.slice(last)));
+    node.parentNode.replaceChild(frag, node);
+  }
 }
 
 // ─────────────────────────────────────────
@@ -282,44 +323,55 @@ function getWordAtPoint(x, y) {
 function setupSelection() {
   const rc = document.getElementById('reader-content');
   const btn = document.getElementById('translate-btn');
-  let tapStart = { time: 0, x: 0, y: 0 };
+  // 按住 200ms 触发翻译，手指移动则取消（不影响滚动）
+  let pressTimer = null;
+  let pressData = null;
+  let touchOrigin = { x: 0, y: 0 };
 
-  // 单击单词直接翻译
   rc.addEventListener('touchstart', (e) => {
-    tapStart = { time: Date.now(), x: e.touches[0].clientX, y: e.touches[0].clientY };
+    const touch = e.touches[0];
+    touchOrigin = { x: touch.clientX, y: touch.clientY };
+    pressData = null;
+    clearTimeout(pressTimer);
+
+    pressTimer = setTimeout(() => {
+      const word = getWordAtPoint(touchOrigin.x, touchOrigin.y);
+      if (!word) return;
+
+      const sel = window.getSelection();
+      let context = word, sentence = word;
+      if (sel && sel.rangeCount > 0) {
+        const range = sel.getRangeAt(0);
+        let para = range.commonAncestorContainer;
+        if (para.nodeType === Node.TEXT_NODE) para = para.parentElement;
+        while (para && para !== rc && !['P','DIV','SECTION','BLOCKQUOTE','LI'].includes(para.tagName)) {
+          para = para.parentElement;
+        }
+        context = para ? para.textContent.trim() : word;
+        sentence = extractSentence(context, word);
+      }
+      // 清除可见选中，避免触发 iOS 系统菜单
+      window.getSelection().removeAllRanges();
+      pressData = { text: word, context, sentence };
+    }, 200);
+  }, { passive: true });
+
+  rc.addEventListener('touchmove', (e) => {
+    const touch = e.touches[0];
+    const dx = Math.abs(touch.clientX - touchOrigin.x);
+    const dy = Math.abs(touch.clientY - touchOrigin.y);
+    if (dx > 8 || dy > 8) {
+      clearTimeout(pressTimer);
+      pressData = null;
+    }
   }, { passive: true });
 
   rc.addEventListener('touchend', (e) => {
-    const dt = Date.now() - tapStart.time;
-    const touch = e.changedTouches[0];
-    const dx = Math.abs(touch.clientX - tapStart.x);
-    const dy = Math.abs(touch.clientY - tapStart.y);
-
-    if (dt > 320 || dx > 10 || dy > 10) return;
-
-    // 已有多词选中时不处理（交给翻译按钮）
-    if ((window.getSelection().toString().trim().length > 3)) return;
-
-    const word = getWordAtPoint(touch.clientX, touch.clientY);
-    if (!word) return;
-
+    clearTimeout(pressTimer);
+    if (!pressData) return;
     e.preventDefault();
-
-    const sel = window.getSelection();
-    let context = word, sentence = word;
-    if (sel && sel.rangeCount > 0) {
-      const range = sel.getRangeAt(0);
-      let para = range.commonAncestorContainer;
-      if (para.nodeType === Node.TEXT_NODE) para = para.parentElement;
-      while (para && para !== rc && !['P','DIV','SECTION','BLOCKQUOTE','LI'].includes(para.tagName)) {
-        para = para.parentElement;
-      }
-      context = para ? para.textContent.trim() : word;
-      sentence = extractSentence(context, word);
-    }
-    window.getSelection().removeAllRanges();
-
-    S.savedSelText = { text: word, context, sentence };
+    S.savedSelText = pressData;
+    pressData = null;
     openPopup(S.savedSelText);
   }, { passive: false });
 
@@ -723,6 +775,19 @@ function initSettings() {
     updateFontSize();
   });
 
+  // 界面字号
+  const savedUiSize = localStorage.getItem('ui_size') || '0';
+  applyUiSize(savedUiSize);
+  document.querySelectorAll('.ui-size-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.size === savedUiSize);
+    btn.addEventListener('click', () => {
+      applyUiSize(btn.dataset.size);
+      localStorage.setItem('ui_size', btn.dataset.size);
+      document.querySelectorAll('.ui-size-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+    });
+  });
+
   document.getElementById('clear-vocab-btn').addEventListener('click', async () => {
     if (!confirm('确定清空所有单词？此操作不可撤销。')) return;
     await dbClear('vocabulary');
@@ -730,6 +795,10 @@ function initSettings() {
     renderVocab();
     toast('单词库已清空');
   });
+}
+
+function applyUiSize(size) {
+  document.documentElement.style.setProperty('--ui-boost', size + 'px');
 }
 
 function updateFontSize() {
@@ -828,6 +897,7 @@ async function init() {
     document.getElementById('theme-btn').textContent = '🌙';
   }
   document.getElementById('reader-content').style.fontSize = S.fontSize + 'px';
+  applyUiSize(localStorage.getItem('ui_size') || '0');
 
   try {
     await initDB();

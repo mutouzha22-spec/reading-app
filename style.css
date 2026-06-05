@@ -1,6 +1,7 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
+  --ui-boost: 0px;
   --bg: #fafafa;
   --bg2: #ffffff;
   --bg3: #f0f0f0;
@@ -158,7 +159,9 @@ html, body {
 .reader-content {
   flex: 1;
   overflow-y: auto;
+  overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: none;
   padding: 20px;
   font-size: var(--reader-font);
   line-height: 1.9;
@@ -166,6 +169,7 @@ html, body {
   background: var(--bg);
   -webkit-user-select: text;
   user-select: text;
+  transform: translateZ(0);
 }
 .reader-content p { margin-bottom: 1.1em; }
 .reader-content h1, .reader-content h2, .reader-content h3 {
@@ -274,11 +278,11 @@ html, body {
   display: flex; justify-content: space-between; align-items: flex-start;
   margin-bottom: 5px;
 }
-.vocab-word { font-size: 17px; font-weight: 700; font-style: italic; }
-.vocab-translation { font-size: 15px; color: var(--accent); font-weight: 600; margin-bottom: 3px; }
-.vocab-meaning { font-size: 13px; color: var(--text2); margin-bottom: 5px; }
+.vocab-word { font-size: calc(17px + var(--ui-boost)); font-weight: 700; font-style: italic; }
+.vocab-translation { font-size: calc(15px + var(--ui-boost)); color: var(--accent); font-weight: 600; margin-bottom: 3px; }
+.vocab-meaning { font-size: calc(13px + var(--ui-boost)); color: var(--text2); margin-bottom: 5px; }
 .vocab-sentence {
-  font-size: 12px; color: var(--text3); line-height: 1.55; font-style: italic;
+  font-size: calc(12px + var(--ui-boost)); color: var(--text3); line-height: 1.55; font-style: italic;
   border-left: 2px solid var(--accent); padding-left: 8px;
 }
 .vocab-delete {
@@ -304,7 +308,7 @@ html, body {
 .choice-btn {
   background: var(--bg2); border: 1.5px solid var(--border);
   border-radius: var(--radius); padding: 14px 16px;
-  font-size: 15px; color: var(--text); cursor: pointer; text-align: left;
+  font-size: calc(15px + var(--ui-boost)); color: var(--text); cursor: pointer; text-align: left;
   -webkit-tap-highlight-color: transparent; transition: all 0.15s;
 }
 .choice-btn:active:not(:disabled) { background: var(--accent-light); }
@@ -371,18 +375,40 @@ html, body {
 .t-base-word { font-size: 16px; font-weight: 700; font-style: italic; color: var(--accent); }
 .t-phonetic { font-size: 14px; color: var(--text3); font-family: 'Lucida Sans Unicode', serif; }
 .t-defs { margin-bottom: 4px; }
-.t-def { font-size: 14px; color: var(--text); line-height: 1.75; }
+.t-def { font-size: calc(14px + var(--ui-boost)); color: var(--text); line-height: 1.75; }
 .t-label {
-  font-size: 11px; font-weight: 700; color: var(--text3);
+  font-size: calc(11px + var(--ui-boost)); font-weight: 700; color: var(--text3);
   text-transform: uppercase; letter-spacing: 0.06em;
   border-top: 1px solid var(--border); padding-top: 10px; margin: 10px 0 6px;
 }
-.t-context { font-size: 14px; color: var(--text2); line-height: 1.7; }
-.t-translation { font-size: 18px; font-weight: 600; color: var(--text); margin-bottom: 6px; }
-.vocab-base { font-size: 13px; color: var(--text3); margin-left: 4px; }
-.vocab-phonetic { font-size: 12px; color: var(--text3); margin-left: 6px; font-family: 'Lucida Sans Unicode', serif; }
+.t-context { font-size: calc(14px + var(--ui-boost)); color: var(--text2); line-height: 1.7; }
+.t-translation { font-size: calc(18px + var(--ui-boost)); font-weight: 600; color: var(--text); margin-bottom: 6px; }
+.vocab-base { font-size: calc(13px + var(--ui-boost)); color: var(--text3); margin-left: 4px; }
+.vocab-phonetic { font-size: calc(12px + var(--ui-boost)); color: var(--text3); margin-left: 6px; font-family: 'Lucida Sans Unicode', serif; }
 .vocab-defs { margin-bottom: 4px; }
-.vocab-def { font-size: 13px; color: var(--text2); line-height: 1.65; }
+.vocab-def { font-size: calc(13px + var(--ui-boost)); color: var(--text2); line-height: 1.65; }
+
+/* ── Vocab highlight in reader ── */
+.vocab-hl {
+  background: rgba(37, 99, 235, 0.12);
+  border-bottom: 1.5px solid var(--accent);
+  border-radius: 2px;
+}
+.dark .vocab-hl {
+  background: rgba(96, 165, 250, 0.18);
+}
+
+/* ── UI size buttons ── */
+.ui-size-control { display: flex; gap: 10px; }
+.ui-size-btn {
+  flex: 1; background: var(--bg3); border: 1.5px solid var(--border);
+  border-radius: var(--radius-sm); padding: 10px;
+  font-size: 15px; cursor: pointer; color: var(--text);
+  -webkit-tap-highlight-color: transparent;
+}
+.ui-size-btn.active {
+  background: var(--accent-light); border-color: var(--accent); color: var(--accent); font-weight: 600;
+}
 
 /* ── Empty state ── */
 .empty-state { text-align: center; padding: 48px 20px; color: var(--text3); }
