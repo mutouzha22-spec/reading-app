@@ -3,12 +3,13 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#ffffff">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="apple-mobile-web-app-title" content="读书助手">
   <link rel="manifest" href="manifest.json">
   <title>读书助手</title>
-  <link rel="stylesheet" href="style.css?v=8">
+  <link rel="stylesheet" href="style.css?v=9">
 </head>
 <body>
 <div id="app">
@@ -20,17 +21,26 @@
       <button class="icon-btn" id="settings-btn">⚙</button>
     </header>
     <div class="content">
-      <div id="book-list" class="book-list"></div>
-      <label class="import-btn" for="file-input">
-        + 导入 EPUB 书籍
-        <input type="file" id="file-input" accept=".epub" style="display:none">
-      </label>
+      <div class="browser-frame">
+        <div class="browser-bar-deco">
+          <div class="browser-dots-deco"><span></span><span></span><span></span></div>
+          <div class="browser-url-deco">reading-app / 书架</div>
+        </div>
+        <div class="browser-body-inner">
+          <div id="book-list" class="book-list"></div>
+          <label class="import-btn" for="file-input">
+            + 导入 EPUB 书籍
+            <input type="file" id="file-input" accept=".epub" style="display:none">
+          </label>
+        </div>
+      </div>
     </div>
   </div>
 
   <!-- 阅读器 -->
   <div id="view-reader" class="view">
     <header class="header reader-header">
+      <div class="browser-dots-deco" style="margin-right:2px"><span></span><span></span><span></span></div>
       <button class="icon-btn" id="back-btn">←</button>
       <div class="header-center">
         <div id="book-title-display" class="header-title"></div>
@@ -67,8 +77,7 @@
     </header>
     <div class="content quiz-content">
       <div class="quiz-card">
-        <div id="quiz-question-label" class="quiz-question-label">这个词是什么意思？</div>
-        <div id="quiz-word" class="quiz-word"></div>
+<div id="quiz-word" class="quiz-word"></div>
         <div id="quiz-phonetic" class="quiz-phonetic"></div>
       </div>
       <div id="quiz-choices" class="quiz-choices"></div>
@@ -154,6 +163,11 @@
 <div id="toast" class="toast hidden"></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
-<script src="app.js?v=8"></script>
+<script src="app.js?v=9"></script>
+<script>
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('./sw.js');
+  }
+</script>
 </body>
 </html>

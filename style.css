@@ -117,7 +117,7 @@ body::before {
   -webkit-tap-highlight-color: transparent;
   position: relative;
 }
-.nav-item.active { color: var(--pink); }
+.nav-item.active { color: var(--pink); background: #fff0f8; }
 .nav-item.active::after {
   content: '';
   position: absolute;
@@ -299,7 +299,7 @@ body::before {
 .vocab-list { margin-top: 16px; }
 .vocab-item {
   background: #fff;
-  padding: 14px; margin-bottom: 10px;
+  padding: 16px 20px; margin-bottom: 10px;
   border: 2px solid var(--text);
   box-shadow: var(--sh-purple);
 }
@@ -427,6 +427,66 @@ body::before {
 .vocab-phonetic { font-size: calc(12px + var(--ui-boost)); color: var(--text3); margin-left: 6px; font-family: 'Lucida Sans Unicode', serif; }
 .vocab-defs { margin-bottom: 4px; }
 .vocab-def { font-size: calc(13px + var(--ui-boost)); color: var(--text2); line-height: 1.65; }
+
+/* ── 胶带装饰 ── */
+.tape {
+  position: absolute;
+  height: 20px;
+  opacity: 0.82;
+  pointer-events: none;
+  z-index: 2;
+}
+.tape-dots {
+  background-image: radial-gradient(circle, rgba(255,255,255,0.7) 2px, transparent 2px);
+  background-size: 8px 8px;
+}
+.tape-pink  { background-color: #ffb3d4; }
+.tape-blue  { background-color: #b3d4ff; }
+.tape-lav   { background-color: #d4b3ff; }
+.tape-tl { top: -8px; left: 12px; width: 52px; transform: rotate(-3deg); }
+.tape-tr { top: -8px; right: 12px; width: 44px; transform: rotate(3deg); }
+
+/* ── 浏览器窗框装饰 ── */
+.browser-frame {
+  background: #fff;
+  border: 2px solid var(--text);
+  box-shadow: var(--sh-purple);
+  overflow: visible;
+}
+.browser-bar-deco {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  background: linear-gradient(90deg, #f0eeff, #fff0f8);
+  border-bottom: 1.5px solid var(--text);
+}
+.browser-dots-deco {
+  display: flex;
+  gap: 5px;
+  flex-shrink: 0;
+}
+.browser-dots-deco span {
+  width: 10px; height: 10px;
+  border-radius: 50%;
+  display: block;
+}
+.browser-dots-deco span:nth-child(1) { background: #ff6b6b; }
+.browser-dots-deco span:nth-child(2) { background: #ffd166; }
+.browser-dots-deco span:nth-child(3) { background: #06d6a0; }
+.browser-url-deco {
+  flex: 1;
+  background: rgba(255,255,255,0.8);
+  border: 1px solid rgba(26,26,46,0.2);
+  padding: 3px 10px;
+  font-size: 11px;
+  color: var(--text2);
+  font-family: monospace;
+}
+.browser-body-inner {
+  padding: 12px;
+}
+.browser-body-inner .book-list { margin-bottom: 10px; }
 
 /* ── Vocab highlight in reader ── */
 .vocab-hl {
