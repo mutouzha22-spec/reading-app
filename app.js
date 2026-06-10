@@ -781,10 +781,89 @@ function initSettings() {
     renderVocab();
     toast('单词库已清空');
   });
+
+  // 背景图
+  const bgFileInput = document.getElementById('bg-file-input');
+  const bgPreview = document.getElementById('bg-preview');
+  const bgOverlayRange = document.getElementById('bg-overlay-range');
+  const bgOverlayVal = document.getElementById('bg-overlay-val');
+  const bgOverlayPreview = document.getElementById('bg-overlay-preview');
+  const bgPlaceholder = document.getElementById('bg-placeholder');
+
+  const savedBg = localStorage.getItem('reader_bg');
+  const savedOverlay = localStorage.getItem('reader_bg_overlay') || '50';
+
+  bgOverlayRange.value = savedOverlay;
+  bgOverlayVal.textContent = savedOverlay + '%';
+  bgOverlayPreview.style.opacity = parseInt(savedOverlay) / 100;
+
+  if (savedBg) {
+    bgPreview.src = savedBg;
+    bgPreview.classList.add('visible');
+    bgPlaceholder.style.display = 'none';
+  }
+
+  bgFileInput.addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const dataUrl = await resizeImage(file);
+    localStorage.setItem('reader_bg', dataUrl);
+    bgPreview.src = dataUrl;
+    bgPreview.classList.add('visible');
+    bgPlaceholder.style.display = 'none';
+    applyReaderBg();
+    toast('背景图已更新');
+  });
+
+  bgOverlayRange.addEventListener('input', () => {
+    const v = bgOverlayRange.value;
+    bgOverlayVal.textContent = v + '%';
+    bgOverlayPreview.style.opacity = parseInt(v) / 100;
+    localStorage.setItem('reader_bg_overlay', v);
+    applyReaderBg();
+  });
+
+  document.getElementById('clear-bg-btn').addEventListener('click', () => {
+    localStorage.removeItem('reader_bg');
+    bgPreview.src = '';
+    bgPreview.classList.remove('visible');
+    bgPlaceholder.style.display = '';
+    applyReaderBg();
+    toast('背景图已清除');
+  });
 }
 
 function applyUiSize(size) {
   document.documentElement.style.setProperty('--ui-boost', size + 'px');
+}
+
+function resizeImage(file) {
+  return new Promise(resolve => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const maxW = 1200;
+      let w = img.width, h = img.height;
+      if (w > maxW) { h = Math.round(h * maxW / w); w = maxW; }
+      const canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+      resolve(canvas.toDataURL('image/jpeg', 0.8));
+    };
+    img.src = url;
+  });
+}
+
+function applyReaderBg() {
+  const dataUrl = localStorage.getItem('reader_bg');
+  const opacity = parseInt(localStorage.getItem('reader_bg_overlay') || '50') / 100;
+  const rc = document.getElementById('reader-content');
+  if (dataUrl) {
+    rc.style.background = `rgba(255,255,255,${opacity}), url(${dataUrl}) center/cover no-repeat`;
+  } else {
+    rc.style.background = 'rgba(255,255,255,0.92)';
+  }
 }
 
 function updateFontSize() {
@@ -903,6 +982,7 @@ async function init() {
     await Promise.all([loadShelf(), loadVocab()]);
     bindEvents();
     initSettings();
+    applyReaderBg();
     if (!localStorage.getItem('deepseek_api_key')) {
       toast('首次使用请先进「设置」输入 API Key', 3500);
     }

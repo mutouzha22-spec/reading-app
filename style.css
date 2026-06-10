@@ -18,7 +18,7 @@
   --sh-blue:   4px 4px 0 #b3d4ff;
   --sh-green:  3px 3px 0 #bbff66;
 
-  --nav-h:    60px;
+  --nav-h:    68px;
   --header-h: 54px;
   --reader-font: 18px;
 }
@@ -86,6 +86,7 @@ body::before {
   padding: 8px; color: var(--text);
   -webkit-tap-highlight-color: transparent; flex-shrink: 0;
 }
+.header-spacer { flex: 1; }
 
 /* ── Scrollable content area ── */
 .content {
@@ -113,7 +114,7 @@ body::before {
   flex: 1; display: flex; flex-direction: column;
   align-items: center; justify-content: center;
   background: none; border: none; cursor: pointer;
-  color: var(--text3); gap: 4px;
+  color: var(--text3);
   -webkit-tap-highlight-color: transparent;
   position: relative;
 }
@@ -125,8 +126,7 @@ body::before {
   width: 28px; height: 2px;
   background: var(--pink);
 }
-.nav-icon { font-size: 24px; line-height: 1; }
-.nav-label { font-size: calc(12px + var(--ui-boost)); font-weight: 700; }
+.nav-label { font-size: calc(15px + var(--ui-boost)); font-weight: 800; letter-spacing: 0.04em; }
 
 /* ── Shelf ── */
 .book-list {
@@ -516,3 +516,20 @@ body::before {
 .empty-state { text-align: center; padding: 48px 20px; color: var(--text3); }
 .empty-icon { font-size: 48px; margin-bottom: 12px; }
 .empty-text { font-size: 15px; line-height: 1.6; }
+
+/* ── Background image settings ── */
+.bg-preview-wrap {
+  position: relative; overflow: hidden;
+  height: 80px; border: 2px solid var(--text);
+  background: #f8f4ff; margin-bottom: 10px;
+  display: flex; align-items: center; justify-content: center;
+}
+.bg-preview { width: 100%; height: 100%; object-fit: cover; display: none; }
+.bg-preview.visible { display: block; }
+.bg-overlay-preview {
+  position: absolute; inset: 0; background: #fff; pointer-events: none;
+}
+.bg-preview-placeholder { font-size: 12px; color: var(--text3); }
+.range-row { display: flex; align-items: center; gap: 10px; margin-top: 8px; }
+.range-row input[type=range] { flex: 1; accent-color: var(--pink); height: 4px; }
+.range-val { font-size: 14px; font-weight: 700; color: var(--text); min-width: 36px; text-align: right; }
