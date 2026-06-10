@@ -860,7 +860,8 @@ function applyReaderBg() {
   const opacity = parseInt(localStorage.getItem('reader_bg_overlay') || '50') / 100;
   const rc = document.getElementById('reader-content');
   if (dataUrl) {
-    rc.style.background = `rgba(255,255,255,${opacity}), url(${dataUrl}) center/cover no-repeat`;
+    const ov = `rgba(255,255,255,${opacity})`;
+    rc.style.background = `linear-gradient(${ov}, ${ov}), url(${dataUrl}) center/cover no-repeat`;
   } else {
     rc.style.background = 'rgba(255,255,255,0.92)';
   }
