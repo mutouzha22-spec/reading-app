@@ -431,6 +431,18 @@ body::before {
 .vocab-phonetic { font-size: calc(12px + var(--ui-boost)); color: var(--text3); margin-left: 6px; font-family: 'Lucida Sans Unicode', serif; }
 .vocab-defs { margin-bottom: 4px; }
 .vocab-def { font-size: calc(13px + var(--ui-boost)); color: var(--text2); line-height: 1.65; }
+.t-example-en { font-size: calc(15px + var(--ui-boost)); font-style: italic; color: var(--text); line-height: 1.6; margin-bottom: 4px; }
+
+/* ── 查词页 ── */
+.lookup-input-row { display: flex; gap: 8px; margin-bottom: 14px; }
+.lookup-input-row .settings-input { flex: 1; margin: 0; }
+.lookup-input-row .primary-btn { width: auto; white-space: nowrap; padding-left: 18px; padding-right: 18px; }
+.lookup-result {
+  background: #fff; border: 2px solid #1a1a2e; box-shadow: 4px 4px 0 #ffd6ec;
+  padding: 16px; min-height: 40px;
+}
+.lookup-result:empty { display: none; }
+.lookup-tip { color: var(--text2); font-size: calc(14px + var(--ui-boost)); line-height: 1.7; }
 
 /* ── 胶带装饰 ── */
 .tape {

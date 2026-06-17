@@ -9,7 +9,7 @@
   <meta name="apple-mobile-web-app-title" content="读书助手">
   <link rel="manifest" href="manifest.json">
   <title>读书助手</title>
-  <link rel="stylesheet" href="style.css?v=10">
+  <link rel="stylesheet" href="style.css?v=11">
 </head>
 <body>
 <div id="app">
@@ -65,6 +65,22 @@
     <div class="content">
       <button id="start-quiz-btn" class="primary-btn" disabled>开始练习</button>
       <div id="vocab-list" class="vocab-list"></div>
+    </div>
+  </div>
+
+  <!-- 查词 -->
+  <div id="view-lookup" class="view">
+    <header class="header">
+      <div class="header-spacer"></div>
+      <h1>查词</h1>
+      <div class="header-spacer"></div>
+    </header>
+    <div class="content">
+      <div class="lookup-input-row">
+        <input type="text" id="lookup-input" class="settings-input" placeholder="输入英文单词或短语" autocapitalize="off" autocorrect="off" spellcheck="false">
+        <button id="lookup-btn" class="primary-btn">查询</button>
+      </div>
+      <div id="lookup-result" class="lookup-result"></div>
     </div>
   </div>
 
@@ -152,6 +168,9 @@
   <button class="nav-item active" data-view="shelf">
     <span class="nav-label">书架</span>
   </button>
+  <button class="nav-item" data-view="lookup">
+    <span class="nav-label">查词</span>
+  </button>
   <button class="nav-item" data-view="vocab">
     <span class="nav-label">单词库</span>
   </button>
@@ -179,7 +198,7 @@
 <div id="toast" class="toast hidden"></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
-<script src="app.js?v=11"></script>
+<script src="app.js?v=12"></script>
 <script>
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('./sw.js');

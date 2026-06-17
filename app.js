@@ -13,6 +13,7 @@ const S = {
   darkMode: localStorage.getItem('dark_mode') === 'true',
   pendingTranslation: null,   // { word, translation, meaning, sentence }
   savedSelText: null,         // { text, context, sentence }
+  pendingLookup: null,        // 查词页待保存的词条
   quizQuestions: [],
   quizIndex: 0,
   quizCorrect: 0,
@@ -143,7 +144,7 @@ function showView(name) {
   document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
   document.getElementById(`view-${name}`).classList.add('active');
   const nav = document.getElementById('bottom-nav');
-  nav.style.display = ['shelf', 'vocab'].includes(name) ? 'flex' : 'none';
+  nav.style.display = ['shelf', 'lookup', 'vocab'].includes(name) ? 'flex' : 'none';
   document.querySelectorAll('.nav-item').forEach(btn => {
     btn.classList.toggle('active', btn.dataset.view === name);
   });
@@ -590,6 +591,167 @@ function quizLabel(v) {
 }
 
 // ─────────────────────────────────────────
+// LOOKUP (查词)
+// ─────────────────────────────────────────
+async function doLookup() {
+  const input = document.getElementById('lookup-input');
+  const resultEl = document.getElementById('lookup-result');
+  const word = input.value.trim();
+  if (!word) { toast('请输入要查的英文'); return; }
+
+  const apiKey = localStorage.getItem('deepseek_api_key');
+  if (!apiKey) {
+    resultEl.innerHTML = '<div class="lookup-tip">请先到「设置」页面输入 DeepSeek API Key</div>';
+    return;
+  }
+
+  resultEl.innerHTML = '<div class="loading-spinner"></div>';
+  S.pendingLookup = null;
+
+  try {
+    const raw = await callDeepSeekLookup(word, apiKey);
+    const parsed = parseLookup(raw);
+    S.pendingLookup = {
+      word,
+      baseForm: parsed.baseForm,
+      phonetic: parsed.phonetic,
+      translation: parsed.quizTranslation,
+      defs: parsed.defs,
+      meaning: parsed.exampleZh,
+      sentence: parsed.exampleEn,
+    };
+    resultEl.innerHTML = renderLookupHtml(parsed) +
+      '<button id="lookup-save-btn" class="primary-btn" style="margin-top:14px">保存到单词库</button>';
+    document.getElementById('lookup-save-btn').addEventListener('click', saveLookupWord);
+  } catch (err) {
+    resultEl.innerHTML = '<div class="lookup-tip">查询失败：' + esc(err.message) + '</div>';
+  }
+}
+
+async function callDeepSeekLookup(word, apiKey) {
+  const isPhrase = word.includes(' ') || word.length > 20;
+
+  const singleWordFmt =
+`原型：[动词原形/名词单数等基本形式]
+音标：/[IPA国际音标]/
+[词性]. [中文含义]
+[词性]. [中文含义]
+（列出2-5个主要词义，每行一个，词性用vi/vt/n/adj/adv等缩写）
+
+例句
+[一句包含该词的英文例句，20个单词以内]
+[这句英文例句的中文翻译]`;
+
+  const phraseFmt =
+`翻译：[流畅的中文翻译]
+
+例句
+[一句包含该短语的英文例句，20个单词以内]
+[这句英文例句的中文翻译]`;
+
+  const prompt =
+`你是英文词典助手。用户想查一个英文${isPhrase ? '短语' : '单词'}，没有上下文，请你分析并给出释义，再自己造一句简短例句帮助理解。
+
+要查的内容：「${word}」
+
+请严格按以下格式回复，不添加任何其他内容：
+${isPhrase ? phraseFmt : singleWordFmt}`;
+
+  const resp = await fetch('https://api.deepseek.com/chat/completions', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+    body: JSON.stringify({
+      model: 'deepseek-chat',
+      messages: [{ role: 'user', content: prompt }],
+      max_tokens: 280,
+      temperature: 0.3,
+    }),
+  });
+
+  if (resp.status === 401) throw new Error('API Key 无效，请在设置中检查');
+  if (resp.status === 429) throw new Error('请求太频繁，请稍后再试');
+  if (!resp.ok) throw new Error(`请求失败 (${resp.status})`);
+
+  const data = await resp.json();
+  return data.choices[0].message.content.trim();
+}
+
+function parseLookup(text) {
+  const lines = text.split('\n');
+  let baseForm = '', phonetic = '', translation = '';
+  const defs = [];
+  let inExample = false;
+  const exampleLines = [];
+
+  for (const raw of lines) {
+    const line = raw.trim();
+    if (!line) continue;
+    if (line.startsWith('原型：')) { baseForm = line.slice(3).trim(); continue; }
+    if (line.startsWith('音标：')) { phonetic = line.slice(3).trim(); continue; }
+    if (line.startsWith('翻译：')) { translation = line.slice(3).trim(); continue; }
+    if (line === '例句') { inExample = true; continue; }
+    if (inExample) { exampleLines.push(line); continue; }
+    if (baseForm && /^[a-z]+[./]/.test(line)) defs.push(line);
+  }
+
+  // 例句两行：第一行英文，第二行中文（按是否含中文字符判断）
+  let exampleEn = '', exampleZh = '';
+  for (const l of exampleLines) {
+    if (/[一-龥]/.test(l)) exampleZh = exampleZh ? exampleZh + l : l;
+    else exampleEn = exampleEn ? exampleEn + ' ' + l : l;
+  }
+
+  let quizTranslation = translation;
+  if (!quizTranslation && defs.length > 0) {
+    quizTranslation = defs[0].replace(/^[a-z]+[./]\s*/i, '').split(/[,，]/)[0].trim();
+  }
+
+  return { baseForm, phonetic, defs, translation, exampleEn, exampleZh, quizTranslation, raw: text };
+}
+
+function renderLookupHtml(p) {
+  const head = (p.baseForm || p.defs.length > 0)
+    ? `
+      <div class="t-head-row">
+        ${p.baseForm ? `<span class="t-base-word">${esc(p.baseForm)}</span>` : ''}
+        ${p.phonetic ? `<span class="t-phonetic">${esc(p.phonetic)}</span>` : ''}
+      </div>
+      <div class="t-defs">${p.defs.map(d => `<div class="t-def">${esc(d)}</div>`).join('')}</div>`
+    : `<div class="t-translation">${esc(p.translation || p.raw)}</div>`;
+
+  const example = (p.exampleEn || p.exampleZh)
+    ? `<div class="t-label">例句</div>
+       ${p.exampleEn ? `<div class="t-example-en">${esc(p.exampleEn)}</div>` : ''}
+       ${p.exampleZh ? `<div class="t-context">${esc(p.exampleZh)}</div>` : ''}`
+    : '';
+
+  return (head + example).trim();
+}
+
+async function saveLookupWord() {
+  if (!S.pendingLookup) return;
+  const pt = S.pendingLookup;
+  const dup = S.vocabulary.find(v => v.word.toLowerCase() === pt.word.toLowerCase());
+  if (dup) { toast('这个词已经在单词库里了'); return; }
+
+  const entry = {
+    word: pt.word,
+    baseForm: pt.baseForm || '',
+    phonetic: pt.phonetic || '',
+    defs: pt.defs || [],
+    translation: pt.translation || '',
+    meaning: pt.meaning || '',
+    sentence: pt.sentence || '',
+    bookTitle: '',
+    dateAdded: Date.now(),
+  };
+  const id = await dbAdd('vocabulary', entry);
+  entry.id = id;
+  S.vocabulary.push(entry);
+  toast('已保存到单词库');
+}
+
+// ─────────────────────────────────────────
 // VOCABULARY
 // ─────────────────────────────────────────
 async function loadVocab() {
@@ -958,6 +1120,12 @@ function bindEvents() {
     document.getElementById('translation-popup').classList.add('hidden');
   });
   document.getElementById('save-word-btn').addEventListener('click', saveWord);
+
+  // lookup 查词
+  document.getElementById('lookup-btn').addEventListener('click', doLookup);
+  document.getElementById('lookup-input').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); doLookup(); }
+  });
 
   // quiz
   document.getElementById('start-quiz-btn').addEventListener('click', startQuiz);
