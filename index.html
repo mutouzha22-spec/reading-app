@@ -9,7 +9,7 @@
   <meta name="apple-mobile-web-app-title" content="读书助手">
   <link rel="manifest" href="manifest.json">
   <title>读书助手</title>
-  <link rel="stylesheet" href="style.css?v=11">
+  <link rel="stylesheet" href="style.css?v=12">
 </head>
 <body>
 <div id="app">
@@ -27,6 +27,7 @@
           <div class="browser-url-deco">reading-app / 书架</div>
         </div>
         <div class="browser-body-inner">
+          <div id="checkin-strip" class="checkin-strip"></div>
           <div id="book-list" class="book-list"></div>
           <label class="import-btn" for="file-input">
             + 导入 EPUB 书籍
@@ -161,6 +162,23 @@
     </div>
   </div>
 
+  <!-- 打卡历史 -->
+  <div id="view-history" class="view">
+    <header class="header">
+      <button class="icon-btn" id="history-back-btn">←</button>
+      <h1>打卡历史</h1>
+    </header>
+    <div class="content">
+      <div class="history-nav">
+        <button class="nav-btn" id="history-prev-btn">‹ 上月</button>
+        <span id="history-month-title" class="history-month-title"></span>
+        <button class="nav-btn" id="history-next-btn">下月 ›</button>
+      </div>
+      <div id="history-month-count" class="history-count"></div>
+      <div id="history-calendar" class="history-calendar"></div>
+    </div>
+  </div>
+
 </div>
 
 <!-- 底部导航 -->
@@ -189,6 +207,7 @@
     </div>
     <div class="popup-actions">
       <button id="save-word-btn" class="primary-btn" style="display:none">保存到单词库</button>
+      <button id="remove-word-btn" class="danger-btn" style="display:none">从单词库移除</button>
       <button id="close-popup-btn" class="secondary-btn">关闭</button>
     </div>
   </div>
@@ -198,7 +217,7 @@
 <div id="toast" class="toast hidden"></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
-<script src="app.js?v=12"></script>
+<script src="app.js?v=13"></script>
 <script>
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('./sw.js');

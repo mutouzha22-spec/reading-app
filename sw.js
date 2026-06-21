@@ -1,5 +1,5 @@
 'use strict';
-const CACHE = 'reading-app-v6';
+const CACHE = 'reading-app-v7';
 
 self.addEventListener('install', () => self.skipWaiting());
 

@@ -545,3 +545,59 @@ body::before {
 .range-row { display: flex; align-items: center; gap: 10px; margin-top: 8px; }
 .range-row input[type=range] { flex: 1; accent-color: var(--pink); height: 4px; }
 .range-val { font-size: 14px; font-weight: 700; color: var(--text); min-width: 36px; text-align: right; }
+
+/* ── 本章摘要 ── */
+.summary-bar { margin-bottom: 14px; }
+.summary-btn {
+  background: #f4f0ff; border: 2px solid var(--text);
+  color: var(--purple); font-size: 13px; font-weight: 800;
+  padding: 7px 14px; cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  box-shadow: 2px 2px 0 #c9b3ff;
+}
+.summary-btn:active { transform: translate(2px, 2px); box-shadow: none; }
+.summary-text {
+  margin-top: 10px; background: #fff8fc;
+  border: 2px solid var(--text); border-left: 5px solid var(--pink);
+  padding: 12px 14px; font-size: 14px; line-height: 1.75; color: var(--text2);
+}
+.summary-text.hidden { display: none; }
+
+/* ── 打卡条 ── */
+.checkin-strip {
+  background: #fff; border: 2px solid var(--text);
+  box-shadow: var(--sh-pink); padding: 12px 14px; margin-bottom: 12px;
+}
+.checkin-strip:empty { display: none; }
+.checkin-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+.checkin-title { font-size: 13px; font-weight: 800; color: var(--text); }
+.checkin-history-btn {
+  background: none; border: none; color: var(--purple);
+  font-size: 12px; font-weight: 700; cursor: pointer;
+  -webkit-tap-highlight-color: transparent; flex-shrink: 0;
+}
+.checkin-dots { display: flex; justify-content: space-between; }
+.checkin-day { display: flex; flex-direction: column; align-items: center; gap: 5px; }
+.checkin-dot {
+  width: 20px; height: 20px; border-radius: 50%;
+  border: 2px solid var(--text3); background: #f0eeff; display: block;
+}
+.checkin-dot.done { background: var(--pink); border-color: var(--text); box-shadow: 0 0 0 2px #ffd6ec; }
+.checkin-dot.today { border-color: var(--purple); transform: scale(1.15); }
+.checkin-lbl { font-size: 11px; color: var(--text3); font-weight: 700; }
+
+/* ── 打卡历史 ── */
+.history-nav { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+.history-month-title { font-size: 16px; font-weight: 800; color: var(--text); }
+.history-count { text-align: center; font-size: 13px; color: var(--purple); font-weight: 700; margin-bottom: 14px; }
+.history-calendar {
+  display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px;
+  background: #fff; border: 2px solid var(--text); box-shadow: var(--sh-purple); padding: 12px;
+}
+.cal-head { text-align: center; font-size: 12px; font-weight: 800; color: var(--text3); padding-bottom: 4px; }
+.cal-cell {
+  aspect-ratio: 1; display: flex; align-items: center; justify-content: center;
+  font-size: 13px; color: var(--text2);
+}
+.cal-cell.done { background: var(--pink); color: #fff; font-weight: 800; border: 2px solid var(--text); }
+.cal-cell.empty { background: none; }

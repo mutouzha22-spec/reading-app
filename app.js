@@ -18,6 +18,8 @@ const S = {
   quizIndex: 0,
   quizCorrect: 0,
   quizAnswered: false,
+  readingTimer: null,         // 打卡计时器
+  historyMonth: null,         // 打卡历史当前查看月份
 };
 
 // ─────────────────────────────────────────
@@ -149,6 +151,11 @@ function showView(name) {
     btn.classList.toggle('active', btn.dataset.view === name);
   });
   S.view = name;
+
+  // 打卡：只有在阅读页才计时
+  if (name === 'reader') startReadingTimer();
+  else stopReadingTimer();
+  if (name === 'shelf') renderCheckinStrip();
 }
 
 // ─────────────────────────────────────────
@@ -173,6 +180,7 @@ async function loadShelf() {
 }
 
 function renderShelf() {
+  renderCheckinStrip();
   const list = document.getElementById('book-list');
   if (!S.books.length) {
     list.innerHTML = `<div class="empty-state" style="grid-column:1/-1">
@@ -232,11 +240,11 @@ function openBook(book) {
   S.currentBook = book;
   S.currentChapter = parseInt(localStorage.getItem(`pos_${book.id}`) || '0');
   document.getElementById('book-title-display').textContent = book.title;
-  renderChapter();
+  renderChapter(true);
   showView('reader');
 }
 
-function renderChapter() {
+function renderChapter(restoreScroll = false) {
   const book = S.currentBook;
   const ch = book.chapters[S.currentChapter];
   document.getElementById('chapter-info').textContent = ch.title;
@@ -248,11 +256,18 @@ function renderChapter() {
   const rc = document.getElementById('reader-content');
   rc.innerHTML = ch.html;
   rc.style.fontSize = S.fontSize + 'px';
-  rc.scrollTop = 0;
 
   localStorage.setItem(`pos_${book.id}`, S.currentChapter);
   hideTranslateBtn();
   highlightVocabWords(rc);
+  insertSummaryBar(rc);
+
+  // 恢复上次滚动位置（重开书时），否则回到章节顶部
+  if (restoreScroll) {
+    rc.scrollTop = parseInt(localStorage.getItem(`scroll_${book.id}_${S.currentChapter}`) || '0');
+  } else {
+    rc.scrollTop = 0;
+  }
 }
 
 function highlightVocabWords(container) {
@@ -342,6 +357,14 @@ function setupSelection() {
     const dy = Math.abs(touch.clientY - tapStart.y);
     if (dt > 320 || dx > 10 || dy > 10) return;
 
+    // 已收藏的高亮词：本地显示释义并可移除，不联网
+    const hitEl = document.elementFromPoint(touch.clientX, touch.clientY);
+    const hlSpan = hitEl && hitEl.closest ? hitEl.closest('.vocab-hl') : null;
+    if (hlSpan) {
+      const entry = findVocabEntry(hlSpan.textContent);
+      if (entry) { e.preventDefault(); openLocalPopup(entry); return; }
+    }
+
     const result = getWordAtPoint(touch.clientX, touch.clientY);
     if (!result) return;
     e.preventDefault();
@@ -391,7 +414,16 @@ function setupSelection() {
   btn.addEventListener('touchend', (e) => { e.preventDefault(); triggerTranslation(); });
   btn.addEventListener('click', triggerTranslation);
 
-  rc.addEventListener('scroll', hideTranslateBtn);
+  // 滚动时隐藏翻译按钮，并记录阅读位置
+  let scrollSaveTimer;
+  rc.addEventListener('scroll', () => {
+    hideTranslateBtn();
+    if (!S.currentBook) return;
+    clearTimeout(scrollSaveTimer);
+    scrollSaveTimer = setTimeout(() => {
+      localStorage.setItem(`scroll_${S.currentBook.id}_${S.currentChapter}`, rc.scrollTop);
+    }, 200);
+  });
 }
 
 function hideTranslateBtn() {
@@ -433,6 +465,7 @@ async function openPopup(sel) {
   wordEl.textContent = sel.text;
   bodyEl.innerHTML = '<div class="loading-spinner"></div>';
   saveBtn.style.display = 'none';
+  document.getElementById('remove-word-btn').style.display = 'none';
   S.pendingTranslation = null;
   popup.classList.remove('hidden');
 
@@ -749,6 +782,238 @@ async function saveLookupWord() {
   entry.id = id;
   S.vocabulary.push(entry);
   toast('已保存到单词库');
+}
+
+// ─────────────────────────────────────────
+// 已收藏词：本地弹窗 + 移除（功能2/3，离线可用）
+// ─────────────────────────────────────────
+function findVocabEntry(text) {
+  const t = text.trim().toLowerCase();
+  return S.vocabulary.find(v =>
+    (v.word && v.word.toLowerCase() === t) ||
+    (v.baseForm && v.baseForm.toLowerCase() === t)
+  );
+}
+
+function openLocalPopup(entry) {
+  const popup = document.getElementById('translation-popup');
+  const wordEl = document.getElementById('popup-word');
+  const bodyEl = document.getElementById('popup-body');
+  const saveBtn = document.getElementById('save-word-btn');
+  const removeBtn = document.getElementById('remove-word-btn');
+
+  wordEl.textContent = entry.word;
+  bodyEl.innerHTML = renderVocabPopupHtml(entry);
+  saveBtn.style.display = 'none';
+  removeBtn.style.display = 'block';
+  removeBtn.onclick = () => removeVocabWord(entry.id);
+  popup.classList.remove('hidden');
+}
+
+function renderVocabPopupHtml(v) {
+  const head = (v.baseForm || v.phonetic) ? `
+    <div class="t-head-row">
+      ${v.baseForm ? `<span class="t-base-word">${esc(v.baseForm)}</span>` : ''}
+      ${v.phonetic ? `<span class="t-phonetic">${esc(v.phonetic)}</span>` : ''}
+    </div>` : '';
+  const defs = (v.defs && v.defs.length)
+    ? `<div class="t-defs">${v.defs.map(d => `<div class="t-def">${esc(d)}</div>`).join('')}</div>`
+    : (v.translation ? `<div class="t-translation">${esc(v.translation)}</div>` : '');
+  const meaning = v.meaning ? `<div class="t-label">结合上下文</div><div class="t-context">${esc(v.meaning)}</div>` : '';
+  const sentence = v.sentence ? `<div class="t-label">例句</div><div class="t-context">"${highlightInSentence(v.sentence, v.word, v.baseForm)}"</div>` : '';
+  return (head + defs + meaning + sentence).trim() || '（这个词没有存释义）';
+}
+
+async function removeVocabWord(id) {
+  await dbDelete('vocabulary', id);
+  S.vocabulary = S.vocabulary.filter(v => v.id !== id);
+  document.getElementById('translation-popup').classList.add('hidden');
+  if (S.view === 'reader' && S.currentBook) {
+    const rc = document.getElementById('reader-content');
+    const keep = rc.scrollTop;
+    renderChapter();
+    rc.scrollTop = keep;
+  }
+  toast('已从单词库移除');
+}
+
+// ─────────────────────────────────────────
+// 本章摘要（功能4，结果缓存省钱）
+// ─────────────────────────────────────────
+function insertSummaryBar(rc) {
+  const bar = document.createElement('div');
+  bar.className = 'summary-bar';
+  bar.innerHTML =
+    `<button type="button" class="summary-btn" id="summary-btn">本章摘要</button>
+     <div class="summary-text hidden" id="summary-text"></div>`;
+  rc.insertAdjacentElement('afterbegin', bar);
+  const key = `summary_${S.currentBook.id}_${S.currentChapter}`;
+  document.getElementById('summary-btn').addEventListener('click', () => toggleSummary(key));
+}
+
+async function toggleSummary(key) {
+  const out = document.getElementById('summary-text');
+  const cached = localStorage.getItem(key);
+  if (cached) {
+    out.textContent = cached;
+    out.classList.toggle('hidden');
+    return;
+  }
+  const apiKey = localStorage.getItem('deepseek_api_key');
+  if (!apiKey) { toast('请先到「设置」页面输入 API Key'); return; }
+
+  const ch = S.currentBook.chapters[S.currentChapter];
+  const tmp = document.createElement('div');
+  tmp.innerHTML = ch.html;
+  const text = tmp.textContent.trim().slice(0, 4000);
+
+  out.classList.remove('hidden');
+  out.innerHTML = '<div class="loading-spinner"></div>';
+  try {
+    const summary = await callDeepSeekSummary(text, apiKey);
+    localStorage.setItem(key, summary);
+    out.textContent = summary;
+  } catch (err) {
+    out.textContent = '摘要生成失败：' + err.message;
+  }
+}
+
+async function callDeepSeekSummary(text, apiKey) {
+  const prompt =
+`你是中文阅读助手。下面是一章英文小说原文，请用中文概括这一章的主要内容，200字以内，只输出概述本身，不要加任何标题或多余说明。
+
+原文：
+"""${text}"""`;
+
+  const resp = await fetch('https://api.deepseek.com/chat/completions', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+    body: JSON.stringify({
+      model: 'deepseek-chat',
+      messages: [{ role: 'user', content: prompt }],
+      max_tokens: 400,
+      temperature: 0.3,
+    }),
+  });
+
+  if (resp.status === 401) throw new Error('API Key 无效，请在设置中检查');
+  if (resp.status === 429) throw new Error('请求太频繁，请稍后再试');
+  if (!resp.ok) throw new Error(`请求失败 (${resp.status})`);
+
+  const data = await resp.json();
+  return data.choices[0].message.content.trim();
+}
+
+// ─────────────────────────────────────────
+// 打卡（功能5）
+// ─────────────────────────────────────────
+const CHECKIN_GOAL_SECS = 300; // 每天读满 5 分钟
+
+function dateKey(d = new Date()) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+function getCheckins() {
+  try { return JSON.parse(localStorage.getItem('checkin_dates') || '[]'); }
+  catch { return []; }
+}
+
+function addCheckin(key) {
+  const set = getCheckins();
+  if (!set.includes(key)) {
+    set.push(key);
+    localStorage.setItem('checkin_dates', JSON.stringify(set));
+  }
+}
+
+function startReadingTimer() {
+  if (S.readingTimer) return;
+  S.readingTimer = setInterval(() => {
+    const key = dateKey();
+    const secs = parseInt(localStorage.getItem(`read_secs_${key}`) || '0') + 1;
+    localStorage.setItem(`read_secs_${key}`, secs);
+    if (secs === CHECKIN_GOAL_SECS && !getCheckins().includes(key)) {
+      addCheckin(key);
+      toast('今日阅读打卡成功！已读满 5 分钟', 3000);
+    }
+  }, 1000);
+}
+
+function stopReadingTimer() {
+  if (S.readingTimer) { clearInterval(S.readingTimer); S.readingTimer = null; }
+}
+
+function renderCheckinStrip() {
+  const el = document.getElementById('checkin-strip');
+  if (!el) return;
+  const checkins = getCheckins();
+  const today = new Date();
+  const dow = (today.getDay() + 6) % 7; // 周一=0
+  const monday = new Date(today);
+  monday.setDate(today.getDate() - dow);
+  const labels = ['一', '二', '三', '四', '五', '六', '日'];
+
+  let dots = '';
+  let weekCount = 0;
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(monday);
+    d.setDate(monday.getDate() + i);
+    const key = dateKey(d);
+    const done = checkins.includes(key);
+    if (done) weekCount++;
+    const isToday = key === dateKey(today);
+    dots += `<div class="checkin-day">
+      <span class="checkin-dot${done ? ' done' : ''}${isToday ? ' today' : ''}"></span>
+      <span class="checkin-lbl">${labels[i]}</span>
+    </div>`;
+  }
+
+  // 连续打卡天数
+  let streak = 0;
+  const cur = new Date(today);
+  if (!checkins.includes(dateKey(cur))) cur.setDate(cur.getDate() - 1);
+  while (checkins.includes(dateKey(cur))) { streak++; cur.setDate(cur.getDate() - 1); }
+
+  el.innerHTML = `
+    <div class="checkin-head">
+      <span class="checkin-title">本周已打卡 ${weekCount} 天 · 连续 ${streak} 天</span>
+      <button class="checkin-history-btn" id="checkin-history-btn">历史 ›</button>
+    </div>
+    <div class="checkin-dots">${dots}</div>`;
+
+  document.getElementById('checkin-history-btn').addEventListener('click', () => {
+    S.historyMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+    renderHistory();
+    showView('history');
+  });
+}
+
+function renderHistory() {
+  const wrap = document.getElementById('history-calendar');
+  const titleEl = document.getElementById('history-month-title');
+  const month = S.historyMonth || new Date();
+  const y = month.getFullYear(), m = month.getMonth();
+  titleEl.textContent = `${y} 年 ${m + 1} 月`;
+
+  const checkins = getCheckins();
+  const firstDow = (new Date(y, m, 1).getDay() + 6) % 7; // 周一=0
+  const daysInMonth = new Date(y, m + 1, 0).getDate();
+  const labels = ['一', '二', '三', '四', '五', '六', '日'];
+
+  let cells = labels.map(l => `<div class="cal-head">${l}</div>`).join('');
+  for (let i = 0; i < firstDow; i++) cells += `<div class="cal-cell empty"></div>`;
+  let monthCount = 0;
+  for (let d = 1; d <= daysInMonth; d++) {
+    const key = dateKey(new Date(y, m, d));
+    const done = checkins.includes(key);
+    if (done) monthCount++;
+    cells += `<div class="cal-cell${done ? ' done' : ''}">${d}</div>`;
+  }
+  wrap.innerHTML = cells;
+  document.getElementById('history-month-count').textContent = `本月打卡 ${monthCount} 天`;
 }
 
 // ─────────────────────────────────────────
@@ -1130,6 +1395,23 @@ function bindEvents() {
   // quiz
   document.getElementById('start-quiz-btn').addEventListener('click', startQuiz);
   document.getElementById('quit-quiz-btn').addEventListener('click', () => showView('vocab'));
+
+  // 打卡历史
+  document.getElementById('history-back-btn').addEventListener('click', () => showView('shelf'));
+  document.getElementById('history-prev-btn').addEventListener('click', () => {
+    S.historyMonth.setMonth(S.historyMonth.getMonth() - 1);
+    renderHistory();
+  });
+  document.getElementById('history-next-btn').addEventListener('click', () => {
+    S.historyMonth.setMonth(S.historyMonth.getMonth() + 1);
+    renderHistory();
+  });
+
+  // 锁屏/切到后台时暂停打卡计时，避免偷算时间
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) stopReadingTimer();
+    else if (S.view === 'reader') startReadingTimer();
+  });
 
   // selection
   setupSelection();
