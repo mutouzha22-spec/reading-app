@@ -66,6 +66,14 @@ function dbDelete(store, id) {
   });
 }
 
+function dbPut(store, data) {
+  return new Promise((res, rej) => {
+    const r = db.transaction(store, 'readwrite').objectStore(store).put(data);
+    r.onsuccess = () => res(r.result);
+    r.onerror = () => rej(r.error);
+  });
+}
+
 function dbClear(store) {
   return new Promise((res, rej) => {
     const r = db.transaction(store, 'readwrite').objectStore(store).clear();
@@ -605,6 +613,8 @@ async function saveWord() {
     sentence: pt.sentence || '',
     bookTitle: S.currentBook ? S.currentBook.title : '',
     dateAdded: Date.now(),
+    reviewLevel: 0,
+    nextReview: Date.now(),
   };
   const id = await dbAdd('vocabulary', entry);
   entry.id = id;
@@ -777,6 +787,8 @@ async function saveLookupWord() {
     sentence: pt.sentence || '',
     bookTitle: '',
     dateAdded: Date.now(),
+    reviewLevel: 0,
+    nextReview: Date.now(),
   };
   const id = await dbAdd('vocabulary', entry);
   entry.id = id;
@@ -820,8 +832,7 @@ function renderVocabPopupHtml(v) {
     ? `<div class="t-defs">${v.defs.map(d => `<div class="t-def">${esc(d)}</div>`).join('')}</div>`
     : (v.translation ? `<div class="t-translation">${esc(v.translation)}</div>` : '');
   const meaning = v.meaning ? `<div class="t-label">结合上下文</div><div class="t-context">${esc(v.meaning)}</div>` : '';
-  const sentence = v.sentence ? `<div class="t-label">例句</div><div class="t-context">"${highlightInSentence(v.sentence, v.word, v.baseForm)}"</div>` : '';
-  return (head + defs + meaning + sentence).trim() || '（这个词没有存释义）';
+  return (head + defs + meaning).trim() || '（这个词没有存释义）';
 }
 
 async function removeVocabWord(id) {
@@ -1070,12 +1081,36 @@ function renderVocab() {
 }
 
 // ─────────────────────────────────────────
-// QUIZ
+// QUIZ（艾宾浩斯记忆曲线复习）
 // ─────────────────────────────────────────
+const REVIEW_INTERVALS = [1, 2, 4, 7, 15, 30]; // 答对后下次复习间隔（天）
+const DAY_MS = 86400000;
+
+function isDue(v) {
+  return (v.nextReview || 0) <= Date.now();
+}
+
+async function updateReviewProgress(v, correct) {
+  if (correct) {
+    v.reviewLevel = (v.reviewLevel || 0) + 1;
+    const idx = Math.min(v.reviewLevel - 1, REVIEW_INTERVALS.length - 1);
+    v.nextReview = Date.now() + REVIEW_INTERVALS[idx] * DAY_MS;
+  } else {
+    v.reviewLevel = 0;
+    v.nextReview = Date.now() + REVIEW_INTERVALS[0] * DAY_MS;
+  }
+  v.lastReview = Date.now();
+  try { await dbPut('vocabulary', v); } catch (_) {}
+}
+
 function startQuiz() {
   if (S.vocabulary.length < 4) { toast('至少需要 4 个单词才能开始练习'); return; }
-  const pool = shuffle([...S.vocabulary]);
-  S.quizQuestions = pool.slice(0, Math.min(20, pool.length));
+  const due = S.vocabulary
+    .filter(isDue)
+    .sort((a, b) => (a.nextReview || 0) - (b.nextReview || 0));
+  if (due.length === 0) { toast('今日复习完成，暂时没有需要复习的单词', 3000); return; }
+  // 到期最久的优先，每组最多 20 个
+  S.quizQuestions = due.slice(0, 20);
   S.quizIndex = 0;
   S.quizCorrect = 0;
   S.quizAnswered = false;
@@ -1116,6 +1151,7 @@ function handleAnswer(btn, q) {
 
   const correct = btn.dataset.correct === 'true';
   if (correct) S.quizCorrect++;
+  updateReviewProgress(q, correct);
 
   document.querySelectorAll('.choice-btn').forEach(b => {
     b.disabled = true;
@@ -1148,16 +1184,23 @@ function handleAnswer(btn, q) {
 
   const isLast = S.quizIndex === S.quizQuestions.length - 1;
   const nextBtn = document.getElementById('next-question-btn');
-  nextBtn.textContent = isLast ? '完成练习' : '下一题';
-  nextBtn.onclick = () => {
-    if (isLast) {
-      showView('vocab');
-      toast(`练习完成！答对 ${S.quizCorrect} / ${S.quizQuestions.length} 题`, 3000, true);
+  if (!isLast) {
+    nextBtn.textContent = '下一题';
+    nextBtn.onclick = () => { S.quizIndex++; renderQuestion(); };
+  } else {
+    // 本组已答完的词复习时间已顺延，重新统计还有没有到期词
+    const remaining = S.vocabulary.filter(isDue).length;
+    if (remaining > 0) {
+      nextBtn.textContent = '继续复习下一组';
+      nextBtn.onclick = () => startQuiz();
     } else {
-      S.quizIndex++;
-      renderQuestion();
+      nextBtn.textContent = '完成';
+      nextBtn.onclick = () => {
+        showView('vocab');
+        toast(`复习完成！本组答对 ${S.quizCorrect} / ${S.quizQuestions.length} 题`, 3000, true);
+      };
     }
-  };
+  }
 }
 
 // ─────────────────────────────────────────
