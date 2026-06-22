@@ -248,8 +248,8 @@ function openBook(book) {
   S.currentBook = book;
   S.currentChapter = parseInt(localStorage.getItem(`pos_${book.id}`) || '0');
   document.getElementById('book-title-display').textContent = book.title;
+  showView('reader');      // 先显示阅读页，否则隐藏状态下无法定位滚动条
   renderChapter(true);
-  showView('reader');
 }
 
 function renderChapter(restoreScroll = false) {
@@ -272,7 +272,10 @@ function renderChapter(restoreScroll = false) {
 
   // 恢复上次滚动位置（重开书时），否则回到章节顶部
   if (restoreScroll) {
-    rc.scrollTop = parseInt(localStorage.getItem(`scroll_${book.id}_${S.currentChapter}`) || '0');
+    const saved = parseInt(localStorage.getItem(`scroll_${book.id}_${S.currentChapter}`) || '0');
+    rc.scrollTop = saved;
+    // 等这一帧布局完成后再定位一次，确保长章节也能跳准
+    requestAnimationFrame(() => { rc.scrollTop = saved; });
   } else {
     rc.scrollTop = 0;
   }
